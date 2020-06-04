@@ -22,6 +22,7 @@ const INITIAL_STATE: SaleState = {
   forma_pagamento: {},
   observacao: null,
   volumeTotal: 0,
+  retiradaLocal: false
 };
 
 const addItem = (
@@ -86,7 +87,7 @@ const setFrete = (
 ): SaleState => {
   const frete = action.payload.frete;
   const total_com_frete = Number(state.total + frete);
-  return { ...state, total_com_frete };
+  return { ...state, total_com_frete, frete };
 };
 
 const setFormaPagamento = (

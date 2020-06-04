@@ -252,7 +252,7 @@ export default function Acompanhamento({ route }) {
                         </TextTitle>
                       </TitleItemSale>
                       <PriceItemSale>
-                        {formatMoney(item?.vlPreco)}
+                        {formatMoney(item?.vlSubTotal)}
                       </PriceItemSale>
                     </ContentItemSale>
                     {(!!item?.Item_Obs || opcoesSelecionadas?.length > 0) && (

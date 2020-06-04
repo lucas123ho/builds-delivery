@@ -6,6 +6,7 @@ import { Provider } from "react-redux";
 import { PersistGate } from "redux-persist/integration/react";
 import { Notifications } from "expo";
 import * as Permissions from "expo-permissions";
+import * as Device from 'expo-device';
 
 import Routes from "./src/routes";
 import { store, persistor } from "./src/store";
@@ -23,30 +24,34 @@ export default function App() {
       setFontLoaded(true);
     }
     async function push() {
-      const { status: existingStatus } = await Permissions.getAsync(
-        Permissions.NOTIFICATIONS
-      );
-      let finalStatus = existingStatus;
-      if (existingStatus !== "granted") {
-        const { status } = await Permissions.askAsync(
+      if(Device.isDevice) {
+        const { status: existingStatus } = await Permissions.getAsync(
           Permissions.NOTIFICATIONS
         );
-        finalStatus = status;
-      }
-      if (finalStatus !== "granted") {
-        alert("Failed to get push token for push notification!");
-        return;
-      }
-      const token = await Notifications.getExpoPushTokenAsync();
-      await api.post("/push", { token });
+        let finalStatus = existingStatus;
+        if (existingStatus !== "granted") {
+          const { status } = await Permissions.askAsync(
+            Permissions.NOTIFICATIONS
+          );
+          finalStatus = status;
+        }
+        if (finalStatus !== "granted") {
+          alert("Failed to get push token for push notification!");
+          return;
+        }
+        const token = await Notifications.getExpoPushTokenAsync();
+        await api.post("/push", { token });
 
-      if (Platform.OS === "android") {
-        Notifications.createChannelAndroidAsync("default", {
-          name: "default",
-          sound: true,
-          priority: "max",
-          vibrate: [0, 250, 250, 250],
-        });
+        if (Platform.OS === "android") {
+          Notifications.createChannelAndroidAsync("default", {
+            name: "default",
+            sound: true,
+            priority: "max",
+            vibrate: [0, 250, 250, 250],
+          });
+        }
+      } else {
+        return
       }
     }
     push();

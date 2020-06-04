@@ -94,12 +94,17 @@ export const ContainerIconRight = styled.TouchableOpacity`
   padding: 16px 10px;
 `;
 
-export const Quantity = styled.TextInput`
+export const ContainerQuantity = styled.View`
   flex: 1;
+  /* height: 100%; */
+  align-items: center;
+  justify-content: center;
+`;
+
+export const Quantity = styled(Text)`
   font-size: ${fonts.sizes.normal};
   font-family: ${fonts.bold};
   color: ${colors.blue};
-  text-align: center;
 `;
 
 export const ButtonAdd = styled.TouchableOpacity`
@@ -176,4 +181,10 @@ export const InfoOpcao = styled(Text)`
   font-size: ${fonts.sizes.normal};
   color: ${colors.gray};
   /* padding: 0 10px; */
+`;
+
+export const Estoque = styled(Text)`
+  font-size: ${fonts.sizes.normal};
+  color: ${colors.gray};
+  letter-spacing: 1px;
 `;

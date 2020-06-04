@@ -103,6 +103,7 @@ export interface Item {
   Opcao_Obs: string;
   Store_Id: number;
   produto: Produto;
+  vlSubTotal: number;
 }
 
 export interface Cliente {

@@ -25,7 +25,7 @@ import {
   ContainerSelect,
   ContainerBall,
   Ball,
-  TextSelect
+  TextSelect,
 } from "./styles";
 import Layout from "@components/Layout";
 import TitlePage from "@components/TitlePage";
@@ -62,6 +62,7 @@ export default function Finalizar() {
     vlTotalMin,
     latitude,
     longitude,
+    retiradaLocal,
   } = useSelector((state: ApplicationState) => ({
     ...state.user,
     ...state.sale,
@@ -71,8 +72,8 @@ export default function Finalizar() {
   const navigation = useNavigation();
   const [value, setValue] = useState(String(valueRedux));
   const [modalPagamentoVisible, setModalPagamentoVisible] = useState(false);
-  const [frete, setFrete] = useState(0);
-  const [pegarNoLocal, setPegarNoLocal] = useState(false);
+  const [frete, setFrete] = useState(retiradaLocal ? 0 : freteSale);
+  const [pegarNoLocal, setPegarNoLocal] = useState(retiradaLocal);
 
   function handleNavigateToProduct(item) {
     item = {
@@ -86,22 +87,29 @@ export default function Finalizar() {
     if (JSON.stringify(items) === "[]") {
       navigation.navigate("Inicio");
     }
+    console.log("Fora: ", retiradaLocal);
     async function getFrete() {
-      const { data: address } = await api.get(
-        `/frete/${cep}?latitude=${latitude}&longitude=${longitude}`
-      );
-      setFrete(address.vlFrete);
-      dispatch(
-        setFreteAction({
-          frete: address.vlFrete,
-        })
-      );
+      if (!retiradaLocal) {
+        console.log("Dentro: ", pegarNoLocal)
+        const { data: address } = await api.get(
+          `/frete/${cep}?latitude=${latitude}&longitude=${longitude}`
+        );
+        setFrete(address.vlFrete);
+        dispatch(
+          setFreteAction({
+            frete: address.vlFrete,
+          })
+        );
+      } else {
+        setFrete(0);
+        dispatch(
+          setFreteAction({
+            frete: 0,
+          })
+        );
+      }
     }
     getFrete();
-    const unsubscribe = navigation.addListener("focus", () => {
-      getFrete();
-    });
-    return unsubscribe;
   }, []);
 
   useEffect(() => {
@@ -112,26 +120,69 @@ export default function Finalizar() {
     );
   }, [value]);
 
+  useEffect(() => {
+    async function setarFrete() {
+      if (pegarNoLocal) {
+        dispatch(
+          setFreteAction({
+            frete: 0,
+          })
+        );
+        setFrete(0);
+      } else {
+        const { data: address } = await api.get(
+          `/frete/${cep}?latitude=${latitude}&longitude=${longitude}`
+        );
+        dispatch(
+          setFreteAction({
+            frete: address.vlFrete,
+          })
+        );
+        setFrete(address.vlFrete);
+      }
+    }
+    setarFrete();
+  }, [pegarNoLocal]);
+
   async function handleFinalizePedido() {
-    console.log("sdfdsf");
-    if (forma_pagamento.nmPagamento) {
-      if (total_com_frete >= vlTotalMin) {
-        if (forma_pagamento?.nmPagamento?.toLocaleLowerCase() === "dinheiro") {
-          if (troco <= vlTrocoMax) {
-            if (Number(value) >= total_com_frete) {
-              dispatch(
-                routeAction({
-                  enviando_pedido: true,
-                })
-              );
+    const { data: result } = await api.post("/produtos/verificar", {
+      itens: items?.map((item) => ({
+        product_id: item?.product_id,
+        quantity: item?.quantity,
+      })),
+    });
+    if (result.error === false) {
+      if (forma_pagamento.nmPagamento) {
+        if (total_com_frete >= vlTotalMin) {
+          if (
+            forma_pagamento?.nmPagamento?.toLocaleLowerCase() === "dinheiro"
+          ) {
+            if (troco <= vlTrocoMax) {
+              if (Number(value) >= total_com_frete) {
+                dispatch(
+                  routeAction({
+                    enviando_pedido: true,
+                  })
+                );
+              } else {
+                Alert.alert(
+                  "Valor em dinheiro menor que o total a pagar",
+                  `O total a pagar é ${formatMoney(
+                    total_com_frete
+                  )}, o valor em dinheiro informado foi ${formatMoney(
+                    Number(value)
+                  )}`,
+                  [
+                    {
+                      text: "Voltar",
+                    },
+                  ]
+                );
+              }
             } else {
               Alert.alert(
-                "Valor em dinheiro menor que o total a pagar",
-                `O total a pagar é ${formatMoney(
-                  total_com_frete
-                )}, o valor em dinheiro informado foi ${formatMoney(
-                  Number(value)
-                )}`,
+                "Valor máximo para troco excedido",
+                `O valor máximo para troco é de ${formatMoney(vlTrocoMax)}.`,
                 [
                   {
                     text: "Voltar",
@@ -140,36 +191,32 @@ export default function Finalizar() {
               );
             }
           } else {
-            Alert.alert(
-              "Valor máximo para troco excedido",
-              `O valor máximo para troco é de ${formatMoney(vlTrocoMax)}.`,
-              [
-                {
-                  text: "Voltar",
-                },
-              ]
+            dispatch(
+              routeAction({
+                enviando_pedido: true,
+              })
             );
           }
         } else {
-          dispatch(
-            routeAction({
-              enviando_pedido: true,
-            })
+          Alert.alert(
+            "Valor mínimo não atingido",
+            `O valor mínimo para entrega é de ${formatMoney(vlTotalMin)}.`,
+            [
+              {
+                text: "Voltar",
+              },
+            ]
           );
         }
       } else {
-        Alert.alert(
-          "Valor mínimo não atingido",
-          `O valor mínimo para entrega é de ${formatMoney(vlTotalMin)}.`,
-          [
-            {
-              text: "Voltar",
-            },
-          ]
-        );
+        setModalPagamentoVisible(true);
       }
     } else {
-      setModalPagamentoVisible(true);
+      Alert.alert("O estoque foi atualizado", `Teste`, [
+        {
+          text: "Voltar",
+        },
+      ]);
     }
   }
 
@@ -179,6 +226,16 @@ export default function Finalizar() {
         observacao: text,
       })
     );
+  }
+
+  async function handleSelectRetirarLocal() {
+    dispatch(
+      saleAction({
+        retiradaLocal: !retiradaLocal,
+      })
+    );
+    console.log(!retiradaLocal);
+    setPegarNoLocal(!pegarNoLocal);
   }
 
   return (
@@ -207,12 +264,8 @@ export default function Finalizar() {
               disabled: pegarNoLocal,
             }}
           />
-          <ContainerSelect onPress={() => setPegarNoLocal(!pegarNoLocal)}>
-            <ContainerBall>
-              {pegarNoLocal && (
-                <Ball />
-              )}
-            </ContainerBall>
+          <ContainerSelect onPress={() => handleSelectRetirarLocal()}>
+            <ContainerBall>{pegarNoLocal && <Ball />}</ContainerBall>
             <TextSelect>Retirar no local</TextSelect>
           </ContainerSelect>
           <Divisor />

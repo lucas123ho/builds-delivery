@@ -56,6 +56,7 @@ export interface SaleState {
   id?: number;
   observacao?: string;
   volumeTotal?: number;
+  retiradaLocal?: boolean;
 }
 
 export interface SaleTypes {

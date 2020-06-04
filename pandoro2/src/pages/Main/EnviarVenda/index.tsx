@@ -86,6 +86,9 @@ export default function EnviarVenda() {
         PagDinheiro: sale?.value,
         vlTotal: sale?.total_com_frete,
         dsObservacao: sale?.observacao,
+        retiradaLocal: sale?.retiradaLocal,
+        vlFrete: sale?.frete,
+        qtdItem: sale?.items?.length
       };
       toSend.itens = sale?.items?.map((item) => {
         const opcoes = [];
@@ -129,12 +132,20 @@ export default function EnviarVenda() {
         return {
           Produto_Id: item?.product_id,
           qtdItem: item?.quantity,
-          vlPreco: item?.total,
+          vlPreco: item?.total/item?.quantity,
+          vlSubTotal: item?.total,
           Item_Obs: item?.observacao,
           Opcao_Obs: opcoesToSend,
         };
       });
       sendPedido(toSend);
+      // console.log(toSend);
+      // dispatch(
+      //   routeAction({
+      //     enviando_pedido: false,
+      //     pedido_aberto: true,
+      //   })
+      // );
     } else {
       navigation.navigate("Finalizar");
     }

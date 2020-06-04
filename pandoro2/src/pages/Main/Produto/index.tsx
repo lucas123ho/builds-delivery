@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { Alert, View, SafeAreaView } from "react-native";
-import { Feather, AntDesign } from "@expo/vector-icons";
+import { Alert, View, SafeAreaView, ActivityIndicator } from "react-native";
+import { Feather } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { useDispatch, useSelector } from "react-redux";
 import { CheckBox } from "react-native-elements";
@@ -29,6 +29,8 @@ import {
   TextButtonAddOpcao,
   TextQuantidadeOpcao,
   InfoOpcao,
+  Estoque,
+  ContainerQuantity,
 } from "./styles";
 import TitlePage from "@components/TitlePage";
 import { Content, Padding } from "@styles/components";
@@ -51,7 +53,9 @@ interface OpcaoSelecionada {
 }
 
 export default function Produtos({ route }) {
-  const { items, volumeTotal } = useSelector((state: ApplicationState) => ({ ...state.sale }));
+  const { items, volumeTotal } = useSelector((state: ApplicationState) => ({
+    ...state.sale,
+  }));
   const config = useSelector((state: ApplicationState) => state.config);
   const { params } = route;
   const name = params?.name;
@@ -74,12 +78,13 @@ export default function Produtos({ route }) {
   const [itensSelecionados, setItensSelecionados] = useState<
     OpcaoSelecionada[]
   >(params?.opcoesSelecionadas || []);
-  const [estoque, setEstoque] = useState();
+  const [estoque, setEstoque] = useState<number>();
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     async function getProduto() {
       const { data: produto } = await api.get(`/produtos/${product_id}`);
-      console.log(produto);
+      setEstoque(produto?.qtdEstoque);
     }
     const [item] = items.filter((item) => item?.id === id);
     if (item) {
@@ -185,7 +190,7 @@ export default function Produtos({ route }) {
     }
   }
 
-  function handleAddItem() {
+  async function handleAddItem() {
     function validation() {
       let valid = true;
       const opcoesObrigatorias = opcoes.filter(
@@ -205,35 +210,66 @@ export default function Produtos({ route }) {
       return valid;
     }
     if (validation()) {
-      if(((volumeTotal - baseQuantity) + quantity) <= config.qtdVolumeMax) {
-        dispatch(
-          addItemAction({
-            item: {
-              name,
-              price: params?.price,
-              product_id,
-              quantity,
-              total,
-              observacao,
-              description,
-              image,
-              id,
-              opcoesSelecionadas: itensSelecionados,
-              opcoes: params?.opcoes
-            },
-          })
-        );
-        navigation.goBack();
+      setLoading(true);
+      const { data: produto } = await api.get(`/produtos/${product_id}`);
+      setLoading(false);
+      if (produto?.qtdEstoque >= quantity) {
+        if (volumeTotal - baseQuantity + quantity <= config.qtdVolumeMax) {
+          dispatch(
+            addItemAction({
+              item: {
+                name,
+                price: params?.price,
+                product_id,
+                quantity,
+                total,
+                observacao,
+                description,
+                image,
+                id,
+                opcoesSelecionadas: itensSelecionados,
+                opcoes: params?.opcoes,
+              },
+            })
+          );
+          navigation.goBack();
+        } else {
+          Alert.alert(
+            "Volume excedido",
+            `O número máximo de itens para entrega é ${
+              config?.qtdVolumeMax
+            } itens por viagem. Atualmente voce tem ${volumeTotal} ite${
+              volumeTotal > 1 ? "ns" : "m"
+            } no carrinho e está tentando adicionar mais ${
+              quantity - baseQuantity
+            } itens`,
+            [
+              {
+                text: "Voltar",
+                onPress: () =>
+                  setQuantity(
+                    !!baseQuantity
+                      ? baseQuantity
+                      : config?.qtdVolumeMax - volumeTotal
+                  ),
+              },
+            ]
+          );
+        }
       } else {
         Alert.alert(
-          "Volume excedido",
-          `O número máximo de itens para entrega é ${config?.qtdVolumeMax} itens por viagem. Para selecionar este produto, retire algum item do carrinho.`,
+          "Atenção!",
+          `Temos apenas ${produto?.qtdEstoque} ite${
+            estoque > 1 ? "ns" : "m"
+          } no nosso estoque.`,
           [
             {
-              text: "Voltar",
+              text: "Certo",
             },
           ]
         );
+        setEstoque(produto?.qtdEstoque);
+        setQuantity(produto?.qtdEstoque);
       }
     } else {
       Alert.alert(
@@ -256,7 +292,7 @@ export default function Produtos({ route }) {
           dispatch(
             removeItemAction({
               id: id,
-              quantity
+              quantity,
             })
           );
           navigation.goBack();
@@ -272,6 +308,20 @@ export default function Produtos({ route }) {
     if (quantity === 0) {
       setQuantity(1);
       setTotal(price);
+    } else if (quantity >= estoque) {
+      setQuantity(estoque);
+      setTotal(price * estoque);
+      Alert.alert(
+        "Atenção!",
+        `Temos apenas ${estoque} ite${
+          estoque > 1 ? "ns" : "m"
+        } no nosso estoque.`,
+        [
+          {
+            text: "Certo",
+          },
+        ]
+      );
     } else {
       setTotal(price * quantity);
     }
@@ -279,175 +329,201 @@ export default function Produtos({ route }) {
 
   return (
     <SafeAreaView style={{ flex: 1 }}>
-    <Content
-      style={{
-        paddingBottom: 0,
-      }}
-    >
-      <TitlePage title="Adicionar item ao carrinho" />
-      <Container
-        contentContainerStyle={{ paddingBottom: 40 }}
-        showsVerticalScrollIndicator={false}
+      <Content
+        style={{
+          paddingBottom: 0,
+        }}
       >
-        {image ? (
-          <Image source={{ uri: image }} resizeMode="cover" />
-        ) : (
-          <Avatar>
-            <Feather name="shopping-cart" size={70} color={colors.lightGray} />
-          </Avatar>
-        )}
-        <Padding>
-          <Title>{capitalize(name)}</Title>
-          {selected && (
-            <Tag onPress={handleRemoveItem}>
-              <TextTag>X Remover do carrimho</TextTag>
-            </Tag>
+        <TitlePage title="Adicionar item ao carrinho" />
+        <Container
+          contentContainerStyle={{ paddingBottom: 40 }}
+          showsVerticalScrollIndicator={false}
+        >
+          {image ? (
+            <Image source={{ uri: image }} resizeMode="cover" />
+          ) : (
+            <Avatar>
+              <Feather
+                name="shopping-cart"
+                size={70}
+                color={colors.lightGray}
+              />
+            </Avatar>
           )}
-          <Description>{params?.description}</Description>
-          <ContainerPrice>
-            {!!normal_price && params?.price < normal_price && (
-              <>
-                <Price
-                  style={{
-                    color: colors.gray,
-                    textDecorationLine: "line-through",
-                    textDecorationStyle: "solid",
-                  }}
-                >
-                  {formatMoney(normal_price)}
-                </Price>
-                <Price style={{ color: colors.gray }}> - </Price>
-              </>
+          <Padding>
+            <Title>{capitalize(name)}</Title>
+            {selected && (
+              <Tag onPress={handleRemoveItem}>
+                <TextTag>X Remover do carrimho</TextTag>
+              </Tag>
             )}
-            <Price>{formatMoney(params?.price)}</Price>
-          </ContainerPrice>
-          <Divisor />
-          {opcoes.map((opcao) => (
-            <View key={String(opcao.Id)}>
-              <Title>{opcao.nmDescricao}</Title>
-              <InfoOpcao style={{ marginBottom: 8 }}>
-                {opcao.obrigatorio === true ? "Obrigatorio*   |  " : ""} Mínimo:{" "}
-                {opcao?.escolhaMin}   |   Maximo: {opcao.escolhaMax}
-              </InfoOpcao>
-              {opcao?.itens?.map((item) =>
-                item?.quantidadeMax <= 1 ? (
-                  <ContainerAddOpcao key={String(item.Id)}>
-                    <CheckBox
-                      checkedColor={colors.green}
-                      checkedIcon="check-box"
-                      uncheckedIcon="check-box-outline-blank"
-                      iconType="material"
-                      checked={
-                        itensSelecionados.filter(
-                          (i) =>
-                            i.item_id === item?.Id && i.opcao_id === opcao.Id
-                        ).length > 0
-                      }
-                      onPress={() => {
-                        toggleOpcaoItem(item.Id, opcao.Id);
-                      }}
-                      title={item.nmDescricao}
-                      containerStyle={{
-                        flex: 1,
-                        backgroundColor: colors.white,
-                        borderWidth: 0,
-                        paddingHorizontal: 0,
-                        marginLeft: 0,
-                        paddingBottom: 0,
-                      }}
-                      textStyle={{
-                        color: colors.black,
-                      }}
-                    />
-                    {!!item?.vlAdicional && (
+            {!!estoque ? (
+              <Estoque>
+                Quantidade em estoque: {estoque} ite{estoque > 1 ? "ns" : "m"}
+              </Estoque>
+            ) : (
+              <View style={{ flexDirection: "row" }}>
+                <ActivityIndicator
+                  size={17}
+                  color={colors.gray}
+                  style={{ alignSelf: "flex-start", marginRight: 10 }}
+                />
+                <Estoque>Carregando estoque...</Estoque>
+              </View>
+            )}
+            <Description>{params?.description}</Description>
+            <ContainerPrice>
+              {!!normal_price && params?.price < normal_price && (
+                <>
+                  <Price
+                    style={{
+                      color: colors.gray,
+                      textDecorationLine: "line-through",
+                      textDecorationStyle: "solid",
+                    }}
+                  >
+                    {formatMoney(normal_price)}
+                  </Price>
+                  <Price style={{ color: colors.gray }}> - </Price>
+                </>
+              )}
+              <Price>{formatMoney(params?.price)}</Price>
+            </ContainerPrice>
+            <Divisor />
+            {opcoes.map((opcao) => (
+              <View key={String(opcao.Id)}>
+                <Title>{opcao.nmDescricao}</Title>
+                <InfoOpcao style={{ marginBottom: 8 }}>
+                  {opcao.obrigatorio === true ? "Obrigatorio*   |  " : ""}{" "}
+                  Mínimo: {opcao?.escolhaMin} | Maximo: {opcao.escolhaMax}
+                </InfoOpcao>
+                {opcao?.itens?.map((item) =>
+                  item?.quantidadeMax <= 1 ? (
+                    <ContainerAddOpcao key={String(item.Id)}>
+                      <CheckBox
+                        checkedColor={colors.green}
+                        checkedIcon="check-box"
+                        uncheckedIcon="check-box-outline-blank"
+                        iconType="material"
+                        checked={
+                          itensSelecionados.filter(
+                            (i) =>
+                              i.item_id === item?.Id && i.opcao_id === opcao.Id
+                          ).length > 0
+                        }
+                        onPress={() => {
+                          toggleOpcaoItem(item.Id, opcao.Id);
+                        }}
+                        title={item.nmDescricao}
+                        containerStyle={{
+                          flex: 1,
+                          backgroundColor: colors.white,
+                          borderWidth: 0,
+                          paddingHorizontal: 0,
+                          marginLeft: 0,
+                          paddingBottom: 0,
+                        }}
+                        textStyle={{
+                          color: colors.black,
+                        }}
+                      />
+                      {!!item?.vlAdicional && (
+                        <InfoOpcao style={{ color: colors.green }}>
+                          {item?.vlAdicional !== 0
+                            ? `+ ${formatMoney(item?.vlAdicional)}`
+                            : ""}
+                        </InfoOpcao>
+                      )}
+                    </ContainerAddOpcao>
+                  ) : (
+                    <ContainerOpcao key={String(item.Id)}>
+                      <OpcaoText>{item?.nmDescricao}</OpcaoText>
                       <InfoOpcao style={{ color: colors.green }}>
                         {item?.vlAdicional !== 0
                           ? `+ ${formatMoney(item?.vlAdicional)}`
                           : ""}
                       </InfoOpcao>
-                    )}
-                  </ContainerAddOpcao>
-                ) : (
-                  <ContainerOpcao key={String(item.Id)}>
-                    <OpcaoText>{item?.nmDescricao}</OpcaoText>
-                    <InfoOpcao style={{ color: colors.green }}>
-                      {item?.vlAdicional !== 0
-                        ? `+ ${formatMoney(item?.vlAdicional)}`
-                        : ""}
-                    </InfoOpcao>
-                    <ContainerAddOpcao style={{ marginLeft: 10 }}>
-                      <ButtonAddOpcao
-                        onPress={() => {
-                          removeOpcaoItem(item.Id, opcao.Id);
-                        }}
-                        disabled={
-                          itensSelecionados.filter(
-                            (i) =>
-                              i.item_id === item?.Id && i.opcao_id === opcao?.Id
-                          ).length === 0
-                        }
-                      >
-                        <TextButtonAddOpcao>-</TextButtonAddOpcao>
-                      </ButtonAddOpcao>
-                      <TextQuantidadeOpcao>
-                        {
-                          itensSelecionados.filter((i) => i.item_id === item.Id)
-                            .length
-                        }
-                      </TextQuantidadeOpcao>
-                      <ButtonAddOpcao
-                        onPress={() => {
-                          handleAddOpcao(item.Id, opcao.Id);
-                        }}
-                        disabled={
-                          itensSelecionados.filter(
-                            (i) =>
-                              i.item_id === item?.Id && i.opcao_id === opcao?.Id
-                          ).length === item?.quantidadeMax ||
-                          itensSelecionados.filter(
-                            (i) => i.opcao_id === opcao?.Id
-                          ).length === opcao?.escolhaMax
-                        }
-                      >
-                        <TextButtonAddOpcao>+</TextButtonAddOpcao>
-                      </ButtonAddOpcao>
-                    </ContainerAddOpcao>
-                  </ContainerOpcao>
-                )
-              )}
+                      <ContainerAddOpcao style={{ marginLeft: 10 }}>
+                        <ButtonAddOpcao
+                          onPress={() => {
+                            removeOpcaoItem(item.Id, opcao.Id);
+                          }}
+                          disabled={
+                            itensSelecionados.filter(
+                              (i) =>
+                                i.item_id === item?.Id &&
+                                i.opcao_id === opcao?.Id
+                            ).length === 0
+                          }
+                        >
+                          <TextButtonAddOpcao>-</TextButtonAddOpcao>
+                        </ButtonAddOpcao>
+                        <TextQuantidadeOpcao>
+                          {
+                            itensSelecionados.filter(
+                              (i) => i.item_id === item.Id
+                            ).length
+                          }
+                        </TextQuantidadeOpcao>
+                        <ButtonAddOpcao
+                          onPress={() => {
+                            handleAddOpcao(item.Id, opcao.Id);
+                          }}
+                          disabled={
+                            itensSelecionados.filter(
+                              (i) =>
+                                i.item_id === item?.Id &&
+                                i.opcao_id === opcao?.Id
+                            ).length === item?.quantidadeMax ||
+                            itensSelecionados.filter(
+                              (i) => i.opcao_id === opcao?.Id
+                            ).length === opcao?.escolhaMax
+                          }
+                        >
+                          <TextButtonAddOpcao>+</TextButtonAddOpcao>
+                        </ButtonAddOpcao>
+                      </ContainerAddOpcao>
+                    </ContainerOpcao>
+                  )
+                )}
 
-              <Divisor />
-            </View>
-          ))}
-          <InputObservacao onChangeText={setObservacao} value={observacao} />
-        </Padding>
-      </Container>
-      <Footer>
-        <Add>
-          <ContainerIconLeft onPress={() => handleToggleQuantity("minus")}>
-            <Feather name="minus" size={20} color={colors.gray} />
-          </ContainerIconLeft>
-          <Quantity
-            onChangeText={handleChangeQuantity}
-            value={String(quantity)}
-            keyboardType="numeric"
-          />
-          <ContainerIconRight onPress={() => handleToggleQuantity("plus")}>
-            <Feather name="plus" size={20} color={colors.gray} />
-          </ContainerIconRight>
-        </Add>
-        <ButtonAdd onPress={handleAddItem}>
-          <TextButtonAdd
-            style={{ fontSize: Number(fonts.sizes.small.replace("px", "")) }}
-          >
-            {selected ? "Atualizar" : "Adicionar"}
-          </TextButtonAdd>
-          <TextButtonAdd style={{ textAlign: "right" }}>
-            {formatMoney(total)}
-          </TextButtonAdd>
-        </ButtonAdd>
-      </Footer>
-    </Content>
+                <Divisor />
+              </View>
+            ))}
+            <InputObservacao onChangeText={setObservacao} value={observacao} />
+          </Padding>
+        </Container>
+        <Footer>
+          <Add>
+            <ContainerIconLeft onPress={() => handleToggleQuantity("minus")}>
+              <Feather name="minus" size={20} color={colors.gray} />
+            </ContainerIconLeft>
+            <ContainerQuantity>
+              <Quantity>{String(quantity)}</Quantity>
+            </ContainerQuantity>
+            <ContainerIconRight onPress={() => handleToggleQuantity("plus")}>
+              <Feather name="plus" size={20} color={colors.gray} />
+            </ContainerIconRight>
+          </Add>
+          <ButtonAdd onPress={handleAddItem}>
+            {loading ? (
+              <ActivityIndicator size={16} color={colors.white} />
+            ) : (
+              <TextButtonAdd
+                style={{
+                  fontSize: Number(fonts.sizes.small.replace("px", "")),
+                }}
+              >
+                {selected ? "Atualizar" : "Adicionar"}
+              </TextButtonAdd>
+            )}
+
+            <TextButtonAdd style={{ textAlign: "right" }}>
+              {formatMoney(total)}
+            </TextButtonAdd>
+          </ButtonAdd>
+        </Footer>
+      </Content>
     </SafeAreaView>
   );
 }
