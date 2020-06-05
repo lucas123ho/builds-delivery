@@ -1,0 +1,10 @@
+{
+  "devToolsPort": 19002,
+  "expoServerPort": 19000,
+  "packagerPort": 19001,
+  "packagerPid": 22169,
+  "expoServerNgrokUrl": "https://i5-w5h.lucas123ho.tests.exp.direct",
+  "packagerNgrokUrl": "https://packager.i5-w5h.lucas123ho.tests.exp.direct",
+  "ngrokPid": 22190,
+  "webpackServerPort": null
+}
