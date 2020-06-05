@@ -1,0 +1,36 @@
+{
+  "expo": {
+    "name": "Pandoro Delivery",
+    "slug": "pandoro-delivery",
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ],
+    "version": "1.0.10",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "updates": {
+      "fallbackToCacheTimeout": 0
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.supportinformatica.pandorodelivery"
+    },
+    "androidStatusBar": {
+      "backgroundColor": "#f7f7f7"
+    },
+    "android": {
+      "package": "br.com.supportinf.pandorodelivery",
+      "versionCode": 10
+    }
+  }
+}
